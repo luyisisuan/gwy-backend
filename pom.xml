@@ -44,6 +44,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.11.0</version> <!-- 使用较新稳定版本 -->
+		</dependency>
 
 		<!-- **MODIFIED:** 注释掉或删除 H2 数据库依赖 -->
 		<!--
