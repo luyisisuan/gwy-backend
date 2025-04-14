@@ -2,7 +2,7 @@ package com.example.gwy_backend.service;
 
 import com.example.gwy_backend.entity.NoteEntry;
 import java.util.List;
-// import java.util.Optional; // 不再需要 Optional
+// 移除了 Optional
 
 public interface NoteService {
 
@@ -13,15 +13,17 @@ public interface NoteService {
     List<NoteEntry> getAllNotesSortedByTimestamp();
 
     /**
-     * 根据 ID 获取单个笔记条目实体 (可选)。
+     * 创建一条新的笔记记录。
+     * @param noteEntry 包含 content 和可选 noteKey 的新笔记对象 (ID 应为 null)
+     * @return 保存后的 NoteEntry 实体 (包含生成的 ID 和时间戳)
+     * @throws IllegalArgumentException 如果 content 为空
      */
-    // Optional<NoteEntry> getNoteEntryById(Long id); // 如果需要按 ID 获取可以保留或添加这个
-
-    // --- 移除 getNoteEntryByKey ---
-    // Optional<NoteEntry> getNoteEntryByKey(String noteKey);
+    NoteEntry createNote(NoteEntry noteEntry) throws IllegalArgumentException;
 
     /**
-     * 创建一条新的笔记记录。
+     * **ADDED:** 根据 ID 删除笔记记录。
+     * @param id 要删除的笔记 ID
+     * @return 如果删除成功返回 true，如果记录不存在返回 false
      */
-    NoteEntry createNote(NoteEntry noteEntry);
+    boolean deleteNoteById(Long id); // <<< 添加删除方法声明
 }

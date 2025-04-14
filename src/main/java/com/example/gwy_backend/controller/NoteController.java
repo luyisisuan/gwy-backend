@@ -7,11 +7,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils; // <<< 建议导入 StringUtils
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-// 移除了 Map 和 Optional 的导入
 
 @RestController
 @RequestMapping("/api/notes")
@@ -27,43 +26,60 @@ public class NoteController {
 
     /**
      * 获取所有笔记记录，按创建时间倒序排列。
-     * @return 包含 NoteEntry 实体的列表 ResponseEntity
      */
     @GetMapping
     public ResponseEntity<List<NoteEntry>> getAllNotesSorted() {
         log.info("Received request to get all notes.");
-        List<NoteEntry> notes = noteService.getAllNotesSortedByTimestamp();
-        return ResponseEntity.ok(notes);
+        try {
+            List<NoteEntry> notes = noteService.getAllNotesSortedByTimestamp();
+            return ResponseEntity.ok(notes);
+        } catch (Exception e) {
+            log.error("Error fetching all notes", e);
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     /**
      * 创建一条新的笔记记录。
-     * 请求体应包含带有 "content" 和可选 "noteKey" 的 JSON 对象。
-     * @param noteEntry 从请求体映射的 NoteEntry 对象
-     * @return 创建成功的 NoteEntry 实体 (201 Created) 或错误响应 (400/500)
      */
     @PostMapping
     public ResponseEntity<?> createNote(@RequestBody NoteEntry noteEntry) {
         log.info("Received request to create note with key: {}", noteEntry.getNoteKey());
-        // 使用 StringUtils.hasText 进行更健壮的空值/空白检查
         if (!StringUtils.hasText(noteEntry.getContent())) {
             log.warn("Note content cannot be empty.");
             return ResponseEntity.badRequest().body("Note content cannot be empty.");
         }
         try {
             NoteEntry createdEntry = noteService.createNote(noteEntry);
-            // 返回 201 Created 状态码和创建的实体
             return ResponseEntity.status(HttpStatus.CREATED).body(createdEntry);
-        } catch (IllegalArgumentException e) { // Service 层抛出的验证异常
+        } catch (IllegalArgumentException e) {
             log.warn("Failed to create note due to invalid argument: {}", e.getMessage());
             return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) { // 捕获其他潜在的运行时异常
-            log.error("Unexpected error creating note", e);
+        } catch (Exception e) {
+            log.error("Error creating note", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred while creating the note.");
         }
     }
 
-    // GET /api/notes/{id} 端点（如果需要按 ID 获取单条）可以保留或添加
-    // PUT /api/notes/{noteKey} 端点已移除，因为是日志式添加
-
+    /**
+     * **ADDED:** 删除指定 ID 的笔记记录。
+     * @param id 要删除的笔记 ID (从路径获取)
+     * @return 成功返回 204 No Content，失败返回 404 Not Found 或 500 Internal Server Error
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteNote(@PathVariable Long id) {
+        log.warn("Received request to delete note with ID: {}", id);
+        try {
+            boolean deleted = noteService.deleteNoteById(id);
+            if (deleted) {
+                return ResponseEntity.noContent().build(); // 204: 成功，无内容返回
+            } else {
+                // Service 层返回 false 通常意味着记录未找到
+                return ResponseEntity.notFound().build(); // 404: 资源未找到
+            }
+        } catch (Exception e) { // 捕获 Service 层可能抛出的其他异常
+             log.error("Error deleting note with ID: {}", id, e);
+             return ResponseEntity.internalServerError().build(); // 500: 服务器内部错误
+        }
+    }
 }
