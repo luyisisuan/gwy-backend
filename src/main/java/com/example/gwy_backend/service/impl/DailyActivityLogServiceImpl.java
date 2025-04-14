@@ -1,33 +1,42 @@
 package com.example.gwy_backend.service.impl;
 
+// 保持 DailyActivityLog 相关的导入，因为还需要处理在线时长
 import com.example.gwy_backend.entity.DailyActivityLog;
 import com.example.gwy_backend.repository.DailyActivityLogRepository;
-import com.example.gwy_backend.service.DailyActivityLogService;
+// 导入 StudyLog 相关的 Repository
+import com.example.gwy_backend.repository.StudyLogRepository; // <<< 导入 StudyLogRepository
+import com.example.gwy_backend.service.DailyActivityLogService; // <<< 接口名可能需要调整
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional; // 确保导入
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime; // <<< 导入 LocalDateTime
 import java.time.temporal.TemporalAdjusters;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional; // 需要导入 Optional
+import java.util.Optional;
 
 @Service
-public class DailyActivityLogServiceImpl implements DailyActivityLogService {
+public class DailyActivityLogServiceImpl implements DailyActivityLogService { // <<< 类名和接口名可能需调整
 
     private static final Logger log = LoggerFactory.getLogger(DailyActivityLogServiceImpl.class);
     private final DailyActivityLogRepository activityLogRepository;
+    private final StudyLogRepository studyLogRepository; // <<< 注入 StudyLogRepository
 
     @Autowired
-    public DailyActivityLogServiceImpl(DailyActivityLogRepository activityLogRepository) {
+    public DailyActivityLogServiceImpl(DailyActivityLogRepository activityLogRepository,
+                                       StudyLogRepository studyLogRepository) { // <<< 修改构造函数
         this.activityLogRepository = activityLogRepository;
+        this.studyLogRepository = studyLogRepository; // <<< 注入
     }
 
+    // addOnlineDuration, getOnlineSecondsForDate, getTodayOnlineSeconds, getLogsForDateRange 方法保持不变
+    // 因为它们仍然负责处理 daily_activity_log 表的在线时长数据
     @Override
     @Transactional
     public void addOnlineDuration(LocalDate date, long secondsToAdd) {
@@ -81,41 +90,62 @@ public class DailyActivityLogServiceImpl implements DailyActivityLogService {
         return activityLogRepository.findByActivityDateBetweenOrderByActivityDateDesc(startDate, endDate);
     }
 
+    // **MODIFIED:** getActivityStats 现在计算 study_log 的时长
     @Override
     @Transactional(readOnly = true)
     public Map<String, Long> getActivityStats() {
-        log.info("Calculating activity stats...");
+        log.info("Calculating activity stats based on StudyLog...");
         Map<String, Long> stats = new HashMap<>();
-
-        long totalSeconds = activityLogRepository.getTotalOnlineSecondsSum();
-        stats.put("total", totalSeconds);
-
         LocalDate today = LocalDate.now();
-        LocalDate weekStart = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        long weekSeconds = activityLogRepository.findByActivityDateBetweenOrderByActivityDateDesc(weekStart, today)
-                .stream().mapToLong(DailyActivityLog::getTotalOnlineSeconds).sum();
-        stats.put("week", weekSeconds);
+        LocalDateTime todayStart = today.atStartOfDay();
+        LocalDateTime nextDayStart = today.plusDays(1).atStartOfDay();
 
-        LocalDate monthStart = today.with(TemporalAdjusters.firstDayOfMonth());
-        long monthSeconds = activityLogRepository.findByActivityDateBetweenOrderByActivityDateDesc(monthStart, today)
-                .stream().mapToLong(DailyActivityLog::getTotalOnlineSeconds).sum();
-        stats.put("month", monthSeconds);
+        // 计算总学习时长 (来自 study_log) - 需要在 StudyLogRepository 添加方法
+        // long totalStudySeconds = studyLogRepository.getTotalStudyDurationSum(); // 假设有此方法
+        // 暂时通过获取所有日志计算 (效率较低)
+         long totalStudySeconds = studyLogRepository.findAll().stream().mapToLong(log -> log.getDurationSeconds() > 0 ? log.getDurationSeconds() : 0).sum();
+        stats.put("total", totalStudySeconds);
 
-        // **MODIFIED:** getActivityStats 返回的 today 应该是 daily_activity_log 的今日在线时长
-        // 而不是 study_log 的时长。如果需要 study_log 的今日时长，需要单独计算或从 StudyLogRepository 获取。
-        // stats.put("today", getTodayOnlineSeconds()); // 正确，获取的是 DailyActivityLog 的今日时长
-        // 如果后端 /stats API 设计为同时返回两种今日时长，需要调整：
-        long todayOnlineSec = getTodayOnlineSeconds();
-        stats.put("todayOnline", todayOnlineSec); // 返回今日在线时长
-        // 假设还需要返回今日来自 study_log 的时长，需要注入 StudyLogRepository 并查询
-        // 例如: long todayStudyLogSeconds = studyLogRepository.sumDurationSecondsBetween(today.atStartOfDay(), today.plusDays(1).atStartOfDay());
-        // stats.put("todayStudy", todayStudyLogSeconds);
+        // 计算本周学习时长 (来自 study_log)
+        LocalDate weekStartDate = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDateTime weekStartDateTime = weekStartDate.atStartOfDay();
+        long weekStudySeconds = studyLogRepository.sumDurationSecondsBetween(weekStartDateTime, nextDayStart);
+        stats.put("week", weekStudySeconds);
 
-        // 暂时只返回 DailyActivityLog 相关统计
-        stats.put("today", todayOnlineSec); // 让 today 也等于今日在线时长
+        // 计算本月学习时长 (来自 study_log)
+        LocalDate monthStartDate = today.with(TemporalAdjusters.firstDayOfMonth());
+        LocalDateTime monthStartDateTime = monthStartDate.atStartOfDay();
+        long monthStudySeconds = studyLogRepository.sumDurationSecondsBetween(monthStartDateTime, nextDayStart);
+        stats.put("month", monthStudySeconds);
 
+        // 计算今日学习时长 (来自 study_log)
+        long todayStudySeconds = studyLogRepository.sumDurationSecondsBetween(todayStart, nextDayStart);
+        stats.put("today", todayStudySeconds); // key "today" 现在代表学习时长
+
+        // 计算今日在线时长 (来自 daily_activity_log)
+        long todayOnlineSec = getTodayOnlineSeconds(); // 调用内部方法
+        stats.put("todayOnline", todayOnlineSec); // key "todayOnline" 代表在线时长
 
         log.info("Activity stats calculated: {}", stats);
         return stats;
     }
+
+     // getAverageDailyStudyTime 方法也应该基于 study_log 计算
+     @Override
+     @Transactional(readOnly = true)
+     public long getAverageDailyStudyTime(int days) {
+          if (days <= 0) days = 30;
+          log.info("Calculating average daily study time for the last {} days.", days);
+          LocalDate endDate = LocalDate.now();
+          LocalDate startDate = endDate.minusDays(days); // 从 N 天前开始
+
+          // 调用 sumDurationSecondsBetween 计算范围内的总学习时长
+          long totalSecondsInRange = studyLogRepository.sumDurationSecondsBetween(startDate.atStartOfDay(), endDate.plusDays(1).atStartOfDay());
+
+          return (days > 0) ? totalSecondsInRange / days : 0;
+     }
+
+     // calculatePercentageChange 辅助方法保持不变
+     // private double calculatePercentageChange(...) { ... }
+
 }

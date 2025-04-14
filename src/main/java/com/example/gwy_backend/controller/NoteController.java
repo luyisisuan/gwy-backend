@@ -5,14 +5,13 @@ import com.example.gwy_backend.service.NoteService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus; // <<< 导入 HttpStatus
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils; // <<< 建议导入 StringUtils
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-// 移除 Map 和 Optional
-// import java.util.Map;
-// import java.util.Optional;
+// 移除了 Map 和 Optional 的导入
 
 @RestController
 @RequestMapping("/api/notes")
@@ -26,41 +25,45 @@ public class NoteController {
         this.noteService = noteService;
     }
 
-    // GET /api/notes - 获取所有笔记 (按创建时间倒序)
+    /**
+     * 获取所有笔记记录，按创建时间倒序排列。
+     * @return 包含 NoteEntry 实体的列表 ResponseEntity
+     */
     @GetMapping
-    public ResponseEntity<List<NoteEntry>> getAllNotesSorted() { // <<< 修改方法名和返回类型
+    public ResponseEntity<List<NoteEntry>> getAllNotesSorted() {
         log.info("Received request to get all notes.");
-        List<NoteEntry> notes = noteService.getAllNotesSortedByTimestamp(); // <<< 调用新 Service 方法
+        List<NoteEntry> notes = noteService.getAllNotesSortedByTimestamp();
         return ResponseEntity.ok(notes);
     }
 
-    // GET /api/notes/{id} - 获取单个笔记实体 (如果需要)
-    // @GetMapping("/{id}")
-    // public ResponseEntity<NoteEntry> getNoteEntryById(@PathVariable Long id) { ... }
-
-    // POST /api/notes - 创建新的笔记记录
-    @PostMapping // <<< 改为 POST
-    public ResponseEntity<?> createNote(@RequestBody NoteEntry noteEntry) { // <<< 接收 NoteEntry 对象
+    /**
+     * 创建一条新的笔记记录。
+     * 请求体应包含带有 "content" 和可选 "noteKey" 的 JSON 对象。
+     * @param noteEntry 从请求体映射的 NoteEntry 对象
+     * @return 创建成功的 NoteEntry 实体 (201 Created) 或错误响应 (400/500)
+     */
+    @PostMapping
+    public ResponseEntity<?> createNote(@RequestBody NoteEntry noteEntry) {
         log.info("Received request to create note with key: {}", noteEntry.getNoteKey());
-        // 基本验证 (Service 层也会验证 content)
-        if (noteEntry.getContent() == null || noteEntry.getContent().trim().isEmpty()) {
+        // 使用 StringUtils.hasText 进行更健壮的空值/空白检查
+        if (!StringUtils.hasText(noteEntry.getContent())) {
             log.warn("Note content cannot be empty.");
-            // 可以返回更详细的错误信息
             return ResponseEntity.badRequest().body("Note content cannot be empty.");
         }
         try {
-            NoteEntry createdEntry = noteService.createNote(noteEntry); // <<< 调用创建方法
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdEntry); // <<< 返回 201 Created
-        } catch (IllegalArgumentException e) {
-            log.warn("Failed to create note: {}", e.getMessage());
+            NoteEntry createdEntry = noteService.createNote(noteEntry);
+            // 返回 201 Created 状态码和创建的实体
+            return ResponseEntity.status(HttpStatus.CREATED).body(createdEntry);
+        } catch (IllegalArgumentException e) { // Service 层抛出的验证异常
+            log.warn("Failed to create note due to invalid argument: {}", e.getMessage());
             return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            log.error("Error creating note", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error creating note.");
+        } catch (Exception e) { // 捕获其他潜在的运行时异常
+            log.error("Unexpected error creating note", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred while creating the note.");
         }
     }
 
-    // --- 移除 PUT /api/notes/{noteKey} 端点 ---
-    // @PutMapping("/{noteKey}")
-    // public ResponseEntity<NoteEntry> saveNote(...) { ... }
+    // GET /api/notes/{id} 端点（如果需要按 ID 获取单条）可以保留或添加
+    // PUT /api/notes/{noteKey} 端点已移除，因为是日志式添加
+
 }

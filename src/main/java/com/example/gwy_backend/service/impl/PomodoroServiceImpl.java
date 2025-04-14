@@ -1,13 +1,15 @@
-package com.example.gwy_backend.service.impl; // <<< 确认包名
+package com.example.gwy_backend.service.impl;
 
-import com.example.gwy_backend.entity.PomodoroSettings;    // <<< 确认 Entity 路径
-import com.example.gwy_backend.entity.StudyLog;          // <<< 确认 Entity 路径
-import com.example.gwy_backend.repository.PomodoroSettingsRepository; // <<< 确认 Repository 路径
-import com.example.gwy_backend.repository.StudyLogRepository;       // <<< 确认 Repository 路径
-import com.example.gwy_backend.service.PomodoroService;         // <<< 确认 Service 接口路径
-import org.slf4j.Logger; // 引入日志
-import org.slf4j.LoggerFactory; // 引入日志
+import com.example.gwy_backend.entity.PomodoroSettings;
+import com.example.gwy_backend.entity.StudyLog;
+import com.example.gwy_backend.event.StudyLogAddedEvent; // <<< 导入事件类
+import com.example.gwy_backend.repository.PomodoroSettingsRepository;
+import com.example.gwy_backend.repository.StudyLogRepository;
+import com.example.gwy_backend.service.PomodoroService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher; // <<< 导入事件发布器
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -21,16 +23,18 @@ import java.util.Optional;
 @Service
 public class PomodoroServiceImpl implements PomodoroService {
 
-    // 添加日志记录器
     private static final Logger log = LoggerFactory.getLogger(PomodoroServiceImpl.class);
-
     private final PomodoroSettingsRepository settingsRepository;
     private final StudyLogRepository studyLogRepository;
+    private final ApplicationEventPublisher eventPublisher; // <<< 注入事件发布器
 
     @Autowired
-    public PomodoroServiceImpl(PomodoroSettingsRepository settingsRepository, StudyLogRepository studyLogRepository) {
+    public PomodoroServiceImpl(PomodoroSettingsRepository settingsRepository,
+                               StudyLogRepository studyLogRepository,
+                               ApplicationEventPublisher eventPublisher) { // <<< 修改构造函数
         this.settingsRepository = settingsRepository;
         this.studyLogRepository = studyLogRepository;
+        this.eventPublisher = eventPublisher; // <<< 注入
     }
 
     // --- Settings Implementation ---
@@ -98,16 +102,28 @@ public class PomodoroServiceImpl implements PomodoroService {
     }
 
     // --- Study Log Implementation ---
-
     @Override
-    @Transactional // 添加操作，需要事务
+    @Transactional
     public StudyLog addStudyLog(StudyLog studyLog) {
-        log.info("Adding new study log: Activity - {}", studyLog.getActivity());
-        studyLog.setId(null); // 确保 ID 为 null 以进行插入
-        // 可以在此添加更多服务器端验证
-        return studyLogRepository.save(studyLog);
-    }
+        log.info("Adding new study log: Activity - '{}', Duration - {}s", studyLog.getActivity(), studyLog.getDurationSeconds());
+        studyLog.setId(null); // 确保是新增
+        StudyLog savedLog = studyLogRepository.save(studyLog); // 保存
 
+        // **MODIFIED:** 发布事件
+        if (savedLog != null && savedLog.getId() != null) { // 确保保存成功且有 ID
+            log.debug("Publishing StudyLogAddedEvent for log id: {}", savedLog.getId());
+            try {
+                eventPublisher.publishEvent(new StudyLogAddedEvent(this, savedLog)); // <<< 发布事件
+            } catch (Exception e) {
+                // 记录发布事件时可能发生的异常，但不应中断主流程
+                log.error("Error publishing StudyLogAddedEvent for log id: {}", savedLog.getId(), e);
+            }
+        } else {
+            log.warn("Study log was not saved correctly, event not published.");
+        }
+
+        return savedLog;
+    }
     @Override
     @Transactional(readOnly = true) // 只读操作
     public List<StudyLog> getRecentStudyLogs(int limit) {
