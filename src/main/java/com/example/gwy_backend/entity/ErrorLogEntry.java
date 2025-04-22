@@ -4,51 +4,60 @@ import jakarta.persistence.*; // 使用 jakarta for Spring Boot 3+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import java.time.LocalDateTime; // 使用 Java 8+ 的日期时间 API
+import java.time.Instant; // <<< 导入 Instant，替换 LocalDateTime
 
 @Entity
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
+@Data // Lombok: 自动生成 getter, setter, toString, equals, hashCode
+@NoArgsConstructor // Lombok: 生成无参构造函数
+@AllArgsConstructor // Lombok: 生成全参构造函数
+@Table(name = "error_log_entry") // 建议明确指定表名
 public class ErrorLogEntry {
 
     @Id
-    // 不再使用客户端生成的ID，让数据库生成
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // 数据库自增 ID
     private Long id;
 
-    private LocalDateTime timestamp; // 记录时间
+    // --- 时间字段修改为 Instant ---
+    @Column(nullable = false, updatable = false) // 创建时间不能为空且创建后不可更新
+    private Instant timestamp; // 记录时间 (使用 Instant 表示 UTC 时间点)
 
-    @Column(columnDefinition = "TEXT") // 对于可能较长的文本，使用 TEXT 类型
+    @Column
+    private Instant lastReviewDate; // 上次复习时间 (使用 Instant，可以为 null)
+    // --- 其他字段保持不变 ---
+
+    @Column(columnDefinition = "TEXT", nullable = false) // 题干不能为空
     private String question; // 题干/问题描述
 
+    @Column(nullable = false) // 模块不能为空
     private String subject; // 所属模块
 
-    private String myAnswer; // 我的答案
+    private String myAnswer; // 我的答案 (可以为空)
 
+    @Column(nullable = false) // 正确答案不能为空
     private String correctAnswer; // 正确答案
 
-    private String knowledgePoint; // 关联知识点
+    private String knowledgePoint; // 关联知识点 (可以为空)
 
-    @Column(columnDefinition = "TEXT")
+    @Column(columnDefinition = "TEXT", nullable = false) // 原因不能为空
     private String reason; // 错误原因分析
 
-    private String imageFile; // 截图文件名 (仅保存文件名)
+    private String imageFile; // 截图文件标识符 (可以为空)
 
+    @Column(nullable = false) // 复习次数不能为空
     private int reviewCount = 0; // 复习次数，默认为 0
 
-    private LocalDateTime lastReviewDate; // 上次复习时间 (可以为 null)
-
-    // 在添加新条目时自动设置当前时间
-    @PrePersist
+    // --- Lifecycle Callback 修改 ---
+    @PrePersist // 在持久化 (INSERT) 之前执行
     protected void onCreate() {
-        timestamp = LocalDateTime.now();
+        // 自动设置当前 UTC 时间为创建时间
+        if (this.timestamp == null) { // 确保只在创建时设置一次
+            this.timestamp = Instant.now(); // <<< 使用 Instant.now() 获取 UTC 时间
+        }
+        // 可以在此强制 reviewCount 为 0，虽然默认值已设置
+        this.reviewCount = 0;
     }
 
-    // 在更新条目时自动更新上次复习时间 (如果 reviewCount 增加了)
-    // 注意：更复杂的逻辑可能需要放在 Service 层处理
-    // @PreUpdate
-    // protected void onUpdate() {
-    //    // 这里可能需要比较旧的 reviewCount，逻辑较复杂，暂时不在实体类处理
-    // }
+    // 注意：Lombok 的 @Data 会自动生成所需的方法，无需手动编写 Getters/Setters
+
+    // @PreUpdate 不再需要，更新 lastReviewDate 的逻辑放在 Service 层更清晰
 }
