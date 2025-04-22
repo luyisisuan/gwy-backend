@@ -26,7 +26,7 @@ public class WebConfig {
                         // 注意：当 allowCredentials 为 true 时，不能使用 "*"
                         .allowedOrigins("http://localhost:5173")
                         // 允许的 HTTP 请求方法
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowedMethods("GET", "POST", "PUT", "DELETE",  "PATCH","OPTIONS")
                         // 允许所有的请求头
                         .allowedHeaders("*")
                         // 是否允许发送 Cookie 等凭据信息
