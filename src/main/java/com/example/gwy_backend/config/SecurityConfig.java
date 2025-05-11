@@ -1,80 +1,94 @@
-package com.example.gwy_backend.config; // 和你的 WebConfig 在同一个包或合适的配置包
+package com.example.gwy_backend.config; // 确保包名与你的项目一致
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod; // <<< 引入 HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.web.cors.CorsConfiguration; // 引入这个
-import org.springframework.web.cors.CorsConfigurationSource; // 引入这个
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource; // 引入这个
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays; // 引入这个
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
-@EnableWebSecurity // 开启Web安全功能
+@EnableWebSecurity
 public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // 1. 配置CORS (非常重要，让Spring Security使用你的CORS配置)
+                // 1. 配置CORS - 让Spring Security使用下面的 corsConfigurationSource Bean
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // 2. 禁用CSRF (如果你的API是无状态的，或者前端没有处理CSRF token)
-                //    对于主要由JS客户端调用的API，通常可以禁用
+                // 2. 禁用CSRF (对于无状态API通常是安全的)
                 .csrf(csrf -> csrf.disable())
 
-                // 3. 配置请求授权规则
+                // 3. 配置请求授权
                 .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/api/**").permitAll() // <<< 允许所有对 /api/** 的请求（暂时）
-                        // 如果某些API需要认证，你可以配置更细致的规则，例如：
-                        // .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        // .requestMatchers("/api/user/**").authenticated()
-                        .anyRequest().authenticated() // 其他所有请求都需要认证 (例如Spring Boot Actuator端点)
+                        // --- 新增/修改的规则，放在通用规则之前 ---
+                        .requestMatchers(HttpMethod.POST, "/api/files/upload").permitAll() // 允许文件上传
+                        .requestMatchers(HttpMethod.GET, "/api/files/download/**").permitAll() // 允许文件下载
+                        // --- 原有的通用规则 ---
+                        .requestMatchers("/api/**").permitAll() // 开发阶段：允许所有对/api/路径的请求
+                        // 在生产环境中，你需要更细致地配置哪些API需要认证/授权
+                        .anyRequest().authenticated() // 其他所有请求（如果存在）都需要认证
                 )
 
-                // 4. 配置Session管理 (对于REST API，通常是无状态的)
+                // 4. 配置Session管理为无状态 (推荐用于REST API)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // 5. 配置表单登录或HTTP Basic认证 (如果你的API不需要浏览器登录，可以简化或移除)
-                //    由于我们上面允许了所有 /api/**，所以默认的登录页重定向可能不会发生
-                //    但为了避免其他路径触发登录，可以这样配置：
-                .formLogin(form -> form.disable()) // 禁用表单登录，避免重定向
-                .httpBasic(httpBasic -> httpBasic.disable()); // 禁用HTTP Basic认证
+                // 5. 禁用默认的登录和HTTP Basic认证，以避免重定向
+                .formLogin(form -> form.disable())
+                .httpBasic(httpBasic -> httpBasic.disable());
 
         return http.build();
     }
 
-    // 定义CORS配置源 (与WebConfig中的配置类似，但这是给Spring Security用的)
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+        // 允许的源列表
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:5173",
                 "http://127.0.0.1:5173"
-                // 如果还有其他源，也加进来
+                // 如果你需要从其他IP或域名访问（例如手机热点时的电脑IP，或生产环境的前端域名），也需要添加
         ));
+        // 允许的方法列表
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*")); // 允许所有头部
-        configuration.setAllowCredentials(true); // 如果需要凭证
-        configuration.setMaxAge(3600L); // 预检请求的缓存时间
+        // 允许的请求头列表
+        configuration.setAllowedHeaders(List.of("*")); // 允许所有头部
+        // 是否允许发送凭证 (如 cookies)
+        configuration.setAllowCredentials(true);
+        // 预检请求的有效时间 (秒)
+        configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", configuration); // 对 /api/** 路径应用此CORS配置
-        // 如果有其他路径也需要CORS，可以继续调用 source.registerCorsConfiguration()
+        // 对所有以 /api/ 开头的路径应用此CORS配置 (这也包括了 /api/files/**)
+        source.registerCorsConfiguration("/api/**", configuration);
+        // 如果有其他路径需要不同的CORS策略，可以继续注册
         return source;
     }
 
-    // 如果你使用了Spring Security的UserDetailsService，这里可以定义一个内存用户或从数据库加载
-    // 例如，对于上面生成的密码，你可以这样配置一个内存用户（仅供开发测试）：
+    // 如果需要，可以配置UserDetailsService等其他安全相关的Bean
     /*
     @Bean
     public UserDetailsService userDetailsService() {
-        UserDetails user = User.builder()
+        // 使用 PasswordEncoder (推荐)
+        // PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        // UserDetails user = User.builder()
+        //     .username("user")
+        //     .password(encoder.encode("your-generated-password-here")) // 替换为实际密码
+        //     .roles("USER")
+        //     .build();
+
+        // 或者，仅供最简单的测试 (不推荐)
+        UserDetails user = User.withDefaultPasswordEncoder()
             .username("user")
-            .password("{noop}d1fe191a-218e-4edb-b66f-10ba1252731a") // {noop} 表示密码未加密
+            .password("d1fe191a-218e-4edb-b66f-10ba1252731a") // 使用你日志中生成的密码
             .roles("USER")
             .build();
         return new InMemoryUserDetailsManager(user);

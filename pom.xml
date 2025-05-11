@@ -75,6 +75,12 @@
 			<optional>true</optional> <!-- 标记为可选，不会传递给依赖此项目的其他项目 -->
 		</dependency>
 
+		<!-- Spring Boot Starter Security: 添加安全支持 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
 		<!-- Spring Boot Starter Test: 用于测试 -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

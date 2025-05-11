@@ -1,41 +1,21 @@
-package com.example.gwy_backend.config; // 确保包名正确
+package com.example.gwy_backend.config;
 
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+// import org.springframework.web.servlet.config.annotation.WebMvcConfigurer; // 如果不再需要，可以移除
 
-/**
- * Spring Web MVC 配置类，用于配置 CORS (跨域资源共享) 等。
- */
 @Configuration
-public class WebConfig {
+public class WebConfig /* implements WebMvcConfigurer */ { // 如果没有其他配置，可以不实现接口
 
-    /**
-     * 配置全局 CORS 规则。
-     *
-     * @return WebMvcConfigurer 实例
-     */
-    @Bean
-    public WebMvcConfigurer corsConfigurer() {
-        return new WebMvcConfigurer() {
-            @Override
-            public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**") // 对所有接口路径生效
-                        // 明确指定允许跨域请求的源地址 (你的前端应用地址)
-                        // 注意：当 allowCredentials 为 true 时，不能使用 "*"
-                        .allowedOrigins("http://localhost:5173")
-                        // 允许的 HTTP 请求方法
-                        .allowedMethods("GET", "POST", "PUT", "DELETE",  "PATCH","OPTIONS")
-                        // 允许所有的请求头
-                        .allowedHeaders("*")
-                        // 是否允许发送 Cookie 等凭据信息
-                        .allowCredentials(true)
-                        // 可选：预检请求 (OPTIONS) 的有效时间 (秒)
-                        .maxAge(3600);
-            }
-        };
+    // 如果WebConfig还有其他配置Web MVC的Bean或方法，保留它们
+    // 如果WebConfig唯一的职责是CORS，并且现在由SecurityConfig处理，
+    // 那么这个WebConfig类中关于CORS的部分可以被注释掉或删除。
+
+    /*
+    // 如果选择让SecurityConfig全权负责CORS，可以注释或删除以下方法
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        // 内容可以为空，或者完全移除这个方法和 WebMvcConfigurer 的实现
+        // 因为SecurityConfig中的 .cors() 配置会优先
     }
-
-    // 如果有其他 Web 相关配置，也可以在这个类中添加 @Bean
+    */
 }
