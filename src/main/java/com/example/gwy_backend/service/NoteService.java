@@ -2,7 +2,7 @@ package com.example.gwy_backend.service;
 
 import com.example.gwy_backend.entity.NoteEntry;
 import java.util.List;
-// 移除了 Optional
+import java.util.Optional; // <<< 引入 Optional
 
 public interface NoteService {
 
@@ -20,10 +20,21 @@ public interface NoteService {
      */
     NoteEntry createNote(NoteEntry noteEntry) throws IllegalArgumentException;
 
+    // --- >>> ADDED: 更新指定 ID 的笔记记录 <<< ---
     /**
-     * **ADDED:** 根据 ID 删除笔记记录。
+     * 更新指定 ID 的笔记记录。
+     * @param id 要更新的笔记 ID
+     * @param noteDetails 包含更新后数据的笔记对象
+     * @return 如果找到并更新成功，则返回包含更新后笔记的 Optional；否则返回 Optional.empty()
+     * @throws IllegalArgumentException 如果 noteDetails 中的 content 为空
+     */
+    Optional<NoteEntry> updateNote(Long id, NoteEntry noteDetails) throws IllegalArgumentException;
+    // --- >>> END ADDED <<< ---
+
+    /**
+     * 根据 ID 删除笔记记录。
      * @param id 要删除的笔记 ID
      * @return 如果删除成功返回 true，如果记录不存在返回 false
      */
-    boolean deleteNoteById(Long id); // <<< 添加删除方法声明
+    boolean deleteNoteById(Long id);
 }

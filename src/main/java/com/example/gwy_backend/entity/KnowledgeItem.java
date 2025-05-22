@@ -25,23 +25,24 @@ public class KnowledgeItem {
     @Column(nullable = false)
     private String category; // 分类 (不能为空)
 
-    @Lob
-    @Column(columnDefinition = "TEXT", nullable = false)
+    @Lob // 这很好，确保 content 可以是长文本
+    @Column(columnDefinition = "TEXT", nullable = false) // 明确指定 TEXT 类型且不能为空
     private String content; // 内容 (不能为空)
 
-    // 使用 @ElementCollection 存储简单的字符串列表 (标签)
-    // 这会在数据库中创建一张额外的表来存储标签和 KnowledgeItem 的关联
-    @ElementCollection(fetch = FetchType.EAGER) // EAGER 表示加载 KnowledgeItem 时同时加载标签
-    @CollectionTable(name = "knowledge_item_tags", joinColumns = @JoinColumn(name = "item_id")) // 指定关联表的名称和外键列名
-    @Column(name = "tag") // 指定存储标签值的列名
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "knowledge_item_tags", joinColumns = @JoinColumn(name = "item_id"))
+    @Column(name = "tag")
     private List<String> tags; // 标签列表
 
+    // --- 修改这里 ---
+    @Column(length = 2048) // 指定长度以匹配数据库中的 VARCHAR(2048)
     private String externalLink; // 外部链接 (可以为 null)
+    // --- 结束修改 ---
 
     private String linkedFile; // 关联文件名 (可以为 null)
 
     @PrePersist
     protected void onCreate() {
-        timestamp = LocalDateTime.now();
+        timestamp = LocalDateTime.now(); // 在持久化之前设置当前时间
     }
 }

@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/knowledge") // 基础路径 /api/knowledge
@@ -23,8 +24,8 @@ public class KnowledgeController {
     // GET /api/knowledge - 获取知识条目 (支持按分类和搜索词筛选)
     @GetMapping
     public ResponseEntity<List<KnowledgeItem>> getKnowledgeItems(
-            @RequestParam(required = false) String category, // 可选分类参数 ?category=xxx
-            @RequestParam(required = false) String search // 可选搜索参数 ?search=yyy
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String search
     ) {
         List<KnowledgeItem> items = knowledgeService.getKnowledgeItems(category, search);
         return ResponseEntity.ok(items);
@@ -41,15 +42,28 @@ public class KnowledgeController {
     // POST /api/knowledge - 添加新的知识条目
     @PostMapping
     public ResponseEntity<KnowledgeItem> addKnowledgeItem(@RequestBody KnowledgeItem knowledgeItem) {
-        // 基本验证 (可以在 Service 层做得更完善)
         if (knowledgeItem.getTitle() == null || knowledgeItem.getTitle().trim().isEmpty() ||
                 knowledgeItem.getCategory() == null || knowledgeItem.getCategory().trim().isEmpty() ||
                 knowledgeItem.getContent() == null || knowledgeItem.getContent().trim().isEmpty()) {
-            return ResponseEntity.badRequest().build(); // 返回 400 Bad Request
+            return ResponseEntity.badRequest().build();
         }
         KnowledgeItem createdItem = knowledgeService.addKnowledgeItem(knowledgeItem);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdItem);
     }
+
+    // --- >>> 添加这个 PUT 方法来处理更新 <<< ---
+    @PutMapping("/{id}")
+    public ResponseEntity<KnowledgeItem> updateKnowledgeItem(@PathVariable Long id, @RequestBody KnowledgeItem knowledgeItemDetails) {
+        // 可以在这里添加验证，例如 knowledgeItemDetails 的必要字段不能为空
+
+        Optional<KnowledgeItem> updatedItemOptional = knowledgeService.updateKnowledgeItem(id, knowledgeItemDetails);
+
+        return updatedItemOptional
+                .map(ResponseEntity::ok) // 如果更新成功，返回 200 OK 和更新后的条目
+                .orElse(ResponseEntity.notFound().build()); // 如果未找到要更新的条目，返回 404 Not Found
+    }
+    // --- <<< 更新方法结束 <<< ---
+
 
     // DELETE /api/knowledge/{id} - 删除知识条目
     @DeleteMapping("/{id}")

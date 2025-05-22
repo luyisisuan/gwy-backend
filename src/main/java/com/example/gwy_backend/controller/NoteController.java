@@ -11,6 +11,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional; // <<< 引入 Optional
 
 @RestController
 @RequestMapping("/api/notes")
@@ -61,25 +62,66 @@ public class NoteController {
         }
     }
 
+    // --- >>> ADDED: 更新指定 ID 的笔记记录 <<< ---
     /**
-     * **ADDED:** 删除指定 ID 的笔记记录。
+     * 更新指定 ID 的笔记记录。
+     * @param id 要更新的笔记 ID (从路径获取)
+     * @param noteDetails 包含更新后数据的笔记对象 (从请求体获取)
+     * @return 成功返回 200 OK 和更新后的笔记，失败返回 404 Not Found, 400 Bad Request 或 500 Internal Server Error
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateNote(@PathVariable Long id, @RequestBody NoteEntry noteDetails) {
+        log.info("Received request to update note with ID: {}", id);
+
+        // 基本验证
+        if (!StringUtils.hasText(noteDetails.getContent())) {
+            log.warn("Note content for update cannot be empty. ID: {}", id);
+            return ResponseEntity.badRequest().body("Note content cannot be empty for update.");
+        }
+        // 你可能还想验证 noteKey 或其他字段
+
+        try {
+            Optional<NoteEntry> updatedNoteOptional = noteService.updateNote(id, noteDetails);
+
+            return updatedNoteOptional
+                    .map(updatedNote -> {
+                        log.info("Successfully updated note with ID: {}", id);
+                        return ResponseEntity.ok(updatedNote); // 200 OK with updated note
+                    })
+                    .orElseGet(() -> {
+                        log.warn("Note with ID: {} not found for update.", id);
+                        return ResponseEntity.notFound().build(); // 404 Not Found
+                    });
+        } catch (IllegalArgumentException e) {
+            log.warn("Failed to update note ID {} due to invalid argument: {}", id, e.getMessage());
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            log.error("Error updating note with ID: {}", id, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred while updating the note.");
+        }
+    }
+    // --- >>> END ADDED <<< ---
+
+    /**
+     * 删除指定 ID 的笔记记录。
      * @param id 要删除的笔记 ID (从路径获取)
      * @return 成功返回 204 No Content，失败返回 404 Not Found 或 500 Internal Server Error
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteNote(@PathVariable Long id) {
-        log.warn("Received request to delete note with ID: {}", id);
+        log.warn("Received request to delete note with ID: {}", id); // Changed to warn as it's a destructive op
         try {
             boolean deleted = noteService.deleteNoteById(id);
             if (deleted) {
-                return ResponseEntity.noContent().build(); // 204: 成功，无内容返回
+                log.info("Successfully deleted note with ID: {}", id);
+                return ResponseEntity.noContent().build();
             } else {
-                // Service 层返回 false 通常意味着记录未找到
-                return ResponseEntity.notFound().build(); // 404: 资源未找到
+                log.warn("Note with ID: {} not found for deletion.", id);
+                return ResponseEntity.notFound().build();
             }
-        } catch (Exception e) { // 捕获 Service 层可能抛出的其他异常
+        } catch (Exception e) {
              log.error("Error deleting note with ID: {}", id, e);
-             return ResponseEntity.internalServerError().build(); // 500: 服务器内部错误
+             return ResponseEntity.internalServerError().build();
         }
     }
 }

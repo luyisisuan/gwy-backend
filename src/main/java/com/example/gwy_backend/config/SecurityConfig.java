@@ -2,7 +2,7 @@ package com.example.gwy_backend.config; // 确保包名与你的项目一致
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod; // <<< 引入 HttpMethod
+// import org.springframework.http.HttpMethod; // 如果所有都permitAll，这个可能就不需要了
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -24,24 +24,18 @@ public class SecurityConfig {
                 // 1. 配置CORS - 让Spring Security使用下面的 corsConfigurationSource Bean
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-                // 2. 禁用CSRF (对于无状态API通常是安全的)
+                // 2. 禁用CSRF (对于无状态API通常是安全的，即使是公开API，禁用也无妨)
                 .csrf(csrf -> csrf.disable())
 
-                // 3. 配置请求授权
+                // 3. 配置请求授权 - 允许所有请求
                 .authorizeHttpRequests(authz -> authz
-                        // --- 新增/修改的规则，放在通用规则之前 ---
-                        .requestMatchers(HttpMethod.POST, "/api/files/upload").permitAll() // 允许文件上传
-                        .requestMatchers(HttpMethod.GET, "/api/files/download/**").permitAll() // 允许文件下载
-                        // --- 原有的通用规则 ---
-                        .requestMatchers("/api/**").permitAll() // 开发阶段：允许所有对/api/路径的请求
-                        // 在生产环境中，你需要更细致地配置哪些API需要认证/授权
-                        .anyRequest().authenticated() // 其他所有请求（如果存在）都需要认证
+                        .anyRequest().permitAll() // <--- 核心改动：允许所有请求，无需认证
                 )
 
                 // 4. 配置Session管理为无状态 (推荐用于REST API)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                // 5. 禁用默认的登录和HTTP Basic认证，以避免重定向
+                // 5. 禁用默认的登录和HTTP Basic认证，因为我们不使用它们
                 .formLogin(form -> form.disable())
                 .httpBasic(httpBasic -> httpBasic.disable());
 
@@ -55,43 +49,25 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:5173",
                 "http://127.0.0.1:5173"
-                // 如果你需要从其他IP或域名访问（例如手机热点时的电脑IP，或生产环境的前端域名），也需要添加
+                // 如果你需要从其他IP或域名访问（例如手机热点时的电脑IP），也需要添加
         ));
         // 允许的方法列表
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         // 允许的请求头列表
-        configuration.setAllowedHeaders(List.of("*")); // 允许所有头部
-        // 是否允许发送凭证 (如 cookies)
-        configuration.setAllowCredentials(true);
+        // 明确指定允许的头部，而不是 "*"
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type", "X-Requested-With"));
+        // 是否允许发送凭证 (如 cookies) - 对于完全公开的API，如果前端不发送凭证，可以设为 false
+        configuration.setAllowCredentials(true); // 如果前端可能发送 withCredentials，保持 true
         // 预检请求的有效时间 (秒)
-        configuration.setMaxAge(3600L);
+        configuration.setMaxAge(3600L); // 1 hour
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        // 对所有以 /api/ 开头的路径应用此CORS配置 (这也包括了 /api/files/**)
-        source.registerCorsConfiguration("/api/**", configuration);
-        // 如果有其他路径需要不同的CORS策略，可以继续注册
+        // 对所有路径应用此CORS配置
+        source.registerCorsConfiguration("/**", configuration); // <--- 应用到所有路径
         return source;
     }
 
-    // 如果需要，可以配置UserDetailsService等其他安全相关的Bean
-    /*
-    @Bean
-    public UserDetailsService userDetailsService() {
-        // 使用 PasswordEncoder (推荐)
-        // PasswordEncoder encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
-        // UserDetails user = User.builder()
-        //     .username("user")
-        //     .password(encoder.encode("your-generated-password-here")) // 替换为实际密码
-        //     .roles("USER")
-        //     .build();
-
-        // 或者，仅供最简单的测试 (不推荐)
-        UserDetails user = User.withDefaultPasswordEncoder()
-            .username("user")
-            .password("d1fe191a-218e-4edb-b66f-10ba1252731a") // 使用你日志中生成的密码
-            .roles("USER")
-            .build();
-        return new InMemoryUserDetailsManager(user);
-    }
-    */
+    // 由于不需要用户系统，PasswordEncoder, AuthenticationManager, UserDetailsService
+    // 和 JwtAuthenticationFilter 相关的Bean都可以移除或注释掉。
+    // 这里已经将它们移除了。
 }
